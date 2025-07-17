@@ -152,7 +152,8 @@ class OperationalSpaceController(Controller):
         self.use_ori = control_ori
         # Determine whether we want to use delta or absolute values as inputs
         self.input_type = input_type
-        assert self.input_type in ["delta", "absolute"], f"Input type must be delta or absolute, got: {self.input_type}"
+        assert self.input_type in [
+            "delta", "absolute"], f"Input type must be delta or absolute, got: {self.input_type}"
 
         # determine reference frame wrt actions are set
         self.input_ref_frame = input_ref_frame
@@ -184,7 +185,8 @@ class OperationalSpaceController(Controller):
         # Verify the proposed impedance mode is supported
         assert impedance_mode in IMPEDANCE_MODES, (
             "Error: Tried to instantiate OSC controller for unsupported "
-            "impedance mode! Inputted impedance mode: {}, Supported modes: {}".format(impedance_mode, IMPEDANCE_MODES)
+            "impedance mode! Inputted impedance mode: {}, Supported modes: {}".format(
+                impedance_mode, IMPEDANCE_MODES)
         )
 
         # Impedance mode
@@ -197,8 +199,10 @@ class OperationalSpaceController(Controller):
             self.control_dim += 6
 
         # limits
-        self.position_limits = np.array(position_limits) if position_limits is not None else position_limits
-        self.orientation_limits = np.array(orientation_limits) if orientation_limits is not None else orientation_limits
+        self.position_limits = np.array(
+            position_limits) if position_limits is not None else position_limits
+        self.orientation_limits = np.array(
+            orientation_limits) if orientation_limits is not None else orientation_limits
 
         # control frequency
         self.control_freq = policy_freq
@@ -244,7 +248,8 @@ class OperationalSpaceController(Controller):
         if self.impedance_mode == "variable":
             damping_ratio, kp, goal_update = action[:6], action[6:12], action[12:]
             self.kp = np.clip(kp, self.kp_min, self.kp_max)
-            self.kd = 2 * np.sqrt(self.kp) * np.clip(damping_ratio, self.damping_ratio_min, self.damping_ratio_max)
+            self.kd = 2 * np.sqrt(self.kp) * np.clip(damping_ratio,
+                                                     self.damping_ratio_min, self.damping_ratio_max)
         elif self.impedance_mode == "variable_kp":
             kp, goal_update = action[:6], action[6:]
             self.kp = np.clip(kp, self.kp_min, self.kp_max)
@@ -266,7 +271,8 @@ class OperationalSpaceController(Controller):
             abs_action = goal_update
             self.goal_pos = abs_action[0:3]
             if self.use_ori is True:
-                self.goal_ori = Rotation.from_rotvec(abs_action[3:6]).as_matrix()
+                self.goal_ori = Rotation.from_rotvec(
+                    abs_action[3:6]).as_matrix()
             else:
                 self.goal_ori = self.compute_goal_ori(np.zeros(3))
         else:
@@ -276,11 +282,13 @@ class OperationalSpaceController(Controller):
             self.interpolator_pos.set_goal(self.goal_pos)
 
         if self.interpolator_ori is not None:
-            self.ori_ref = np.array(self.ref_ori_mat)  # reference is the current orientation at start
+            # reference is the current orientation at start
+            self.ori_ref = np.array(self.ref_ori_mat)
             self.interpolator_ori.set_goal(
                 orientation_error(self.goal_ori, self.ori_ref)
             )  # goal is the total orientation error
-            self.relative_ori = np.zeros(3)  # relative orientation always starts at 0
+            # relative orientation always starts at 0
+            self.relative_ori = np.zeros(3)
 
     def world_to_origin_frame(self, vec):
         """
@@ -293,7 +301,8 @@ class OperationalSpaceController(Controller):
 
         origin_frame = T.make_pose(self.origin_pos, self.origin_ori)
         origin_frame_inv = T.pose_inv(origin_frame)
-        vec_origin_pose = T.pose_in_A_to_pose_in_B(world_frame, origin_frame_inv)
+        vec_origin_pose = T.pose_in_A_to_pose_in_B(
+            world_frame, origin_frame_inv)
         vec_origin_pos, _ = T.mat2pose(vec_origin_pose)
         return vec_origin_pos
 
@@ -325,7 +334,7 @@ class OperationalSpaceController(Controller):
             # if goal is not already set, set it to current position (in controller ref frame)
             if self.input_ref_frame == "base":
                 self.goal_pos = self.world_to_origin_frame(self.ref_pos)
-            elif self.input_ref_frame == "world":
+            elif self.reset_goal == "world":
                 self.goal_pos = self.ref_pos
             else:
                 raise ValueError
@@ -427,7 +436,8 @@ class OperationalSpaceController(Controller):
         else:
             if self.input_ref_frame == "base":
                 # compute goal based on current base position and orientation
-                desired_world_pos = self.origin_pos + np.dot(self.origin_ori, self.goal_pos)
+                desired_world_pos = self.origin_pos + \
+                    np.dot(self.origin_ori, self.goal_pos)
             elif self.input_ref_frame == "world":
                 desired_world_pos = self.goal_pos
             else:
@@ -435,7 +445,8 @@ class OperationalSpaceController(Controller):
 
         if self.interpolator_ori is not None:
             # relative orientation based on difference between current ori and ref
-            self.relative_ori = orientation_error(self.ref_ori_mat, self.ori_ref)
+            self.relative_ori = orientation_error(
+                self.ref_ori_mat, self.ori_ref)
 
             ori_error = self.interpolator_ori.get_interpolated_goal()
         else:
@@ -450,7 +461,8 @@ class OperationalSpaceController(Controller):
 
         # Compute desired force and torque based on errors
         position_error = desired_world_pos - self.ref_pos
-        base_pos_vel = np.array(self.sim.data.get_site_xvelp(f"{self.naming_prefix}{self.part_name}_center"))
+        base_pos_vel = np.array(self.sim.data.get_site_xvelp(
+            f"{self.naming_prefix}{self.part_name}_center"))
         vel_pos_error = -(self.ref_pos_vel - base_pos_vel)
 
         # F_r = kp * pos_err + kd * vel_err
@@ -458,7 +470,8 @@ class OperationalSpaceController(Controller):
             vel_pos_error, self.kd[0:3]
         )
 
-        base_ori_vel = np.array(self.sim.data.get_site_xvelr(f"{self.naming_prefix}{self.part_name}_center"))
+        base_ori_vel = np.array(self.sim.data.get_site_xvelr(
+            f"{self.naming_prefix}{self.part_name}_center"))
         vel_ori_error = -(self.ref_ori_vel - base_ori_vel)
 
         # Tau_r = kp * ori_err + kd * vel_err
@@ -475,13 +488,15 @@ class OperationalSpaceController(Controller):
         if self.uncoupling:
             decoupled_force = np.dot(lambda_pos, desired_force)
             decoupled_torque = np.dot(lambda_ori, desired_torque)
-            decoupled_wrench = np.concatenate([decoupled_force, decoupled_torque])
+            decoupled_wrench = np.concatenate(
+                [decoupled_force, decoupled_torque])
         else:
             desired_wrench = np.concatenate([desired_force, desired_torque])
             decoupled_wrench = np.dot(lambda_full, desired_wrench)
 
         # Gamma (without null torques) = J^T * F + gravity compensations
-        self.torques = np.dot(self.J_full.T, decoupled_wrench) + self.torque_compensation
+        self.torques = np.dot(
+            self.J_full.T, decoupled_wrench) + self.torque_compensation
         # Calculate and add nullspace torques (nullspace_matrix^T * Gamma_null) to final torques
         # Note: Gamma_null = desired nullspace pose torques, assumed to be positional joint control relative
         #                     to the initial joint positions
@@ -537,11 +552,13 @@ class OperationalSpaceController(Controller):
             self.interpolator_pos.set_goal(self.goal_pos)
 
         if self.interpolator_ori is not None:
-            self.ori_ref = np.array(self.ref_ori_mat)  # reference is the current orientation at start
+            # reference is the current orientation at start
+            self.ori_ref = np.array(self.ref_ori_mat)
             self.interpolator_ori.set_goal(
                 orientation_error(self.goal_ori, self.ori_ref)
             )  # goal is the total orientation error
-            self.relative_ori = np.zeros(3)  # relative orientation always starts at 0
+            # relative orientation always starts at 0
+            self.relative_ori = np.zeros(3)
 
     @property
     def control_limits(self):
@@ -560,8 +577,10 @@ class OperationalSpaceController(Controller):
                 - (np.array) maximum action values
         """
         if self.impedance_mode == "variable":
-            low = np.concatenate([self.damping_ratio_min, self.kp_min, self.input_min])
-            high = np.concatenate([self.damping_ratio_max, self.kp_max, self.input_max])
+            low = np.concatenate(
+                [self.damping_ratio_min, self.kp_min, self.input_min])
+            high = np.concatenate(
+                [self.damping_ratio_max, self.kp_max, self.input_max])
         elif self.impedance_mode == "variable_kp":
             low = np.concatenate([self.kp_min, self.input_min])
             high = np.concatenate([self.kp_max, self.input_max])
@@ -573,8 +592,10 @@ class OperationalSpaceController(Controller):
         """
         helper function that converts delta action into absolute action
         """
-        abs_pos = self.compute_goal_pos(delta_ac[0:3], goal_update_mode=goal_update_mode)
-        abs_ori = self.compute_goal_ori(delta_ac[3:6], goal_update_mode=goal_update_mode)
+        abs_pos = self.compute_goal_pos(
+            delta_ac[0:3], goal_update_mode=goal_update_mode)
+        abs_ori = self.compute_goal_ori(
+            delta_ac[3:6], goal_update_mode=goal_update_mode)
         abs_rot = T.quat2axisangle(T.mat2quat(abs_ori))
         abs_action = np.concatenate([abs_pos, abs_rot])
         return abs_action

@@ -2,8 +2,7 @@ from robosuite.controllers.parts.controller import Controller
 from robosuite.utils.control_utils import *
 import robosuite.utils.transform_utils as T
 import numpy as np
-# TODO Fix this
-from robosuite.controllers.composite.composite_controller import register_composite_controller
+from scipy.spatial.transform import Rotation
 
 # Set VERBOSE to True to debug
 np.set_printoptions(precision=3)
@@ -24,7 +23,6 @@ def angle_diff(vec1, vec2, degree=True):
     return angle
 
 
-@register_composite_controller
 class OSCDelta(Controller):
     """
     Controller for controlling robot arm via operational space control. Allows position and / or orientation control
@@ -117,7 +115,7 @@ class OSCDelta(Controller):
 
     def __init__(self,
                  sim,
-                 eef_name,
+                 ref_name,  # ref_name
                  joint_indexes,
                  actuator_range,
                  input_max=1,
@@ -129,6 +127,7 @@ class OSCDelta(Controller):
                  kp=150,
                  damping_ratio=1,
                  impedance_mode="fixed",
+                 input_ref_frame="base",
                  kp_limits=(0, 300),
                  damping_ratio_limits=(0, 100),
                  policy_freq=20,
@@ -137,34 +136,43 @@ class OSCDelta(Controller):
                  interpolator_pos=None,
                  interpolator_ori=None,
                  control_ori=True,
-                 control_delta=True,
                  uncouple_pos_ori=True,
                  use_lambda=False,
                  use_nullspace=False,
                  type=None,
-                 control_axis=(1, 1, 1, 1, 1, 1),
+                 lite_physics=True,
+                 input_type="delta",
+
+
                  **kwargs  # does nothing; used so no error raised when dict is passed with extra terms used previously
                  ):
 
         super().__init__(
             sim,
-            eef_name,
-            joint_indexes,
-            actuator_range,
+            ref_name=ref_name,
+            joint_indexes=joint_indexes,
+            actuator_range=actuator_range,
+            lite_physics=lite_physics,
+            part_name=kwargs.get("part_name", None),
+            naming_prefix=kwargs.get("naming_prefix", None),
+
+
         )
-        # Determine whether this is pos ori or just pos
-        self.controller_mode = 'relative' if control_delta is True else 'accumulate'
 
-        # Control dimension
-        # Corresponds to translation in x,y,z and rotation along x,y,z
-        self.control_axis = np.array(control_axis, dtype=np.float32)
+        self.use_ori = control_ori
 
-        # Backward compatibility
-        if control_ori is False:
-            self.control_axis[3:] = 0
+        self.input_type = input_type
+        assert self.input_type in [
+            "delta", "absolute"], f"Input type must be delta or absolute, got: {self.input_type}"
+
+        self.input_ref_frame = input_ref_frame
+        assert self.input_ref_frame in [
+            "world",
+            "base",
+        ], f"Input reference frame must be world or base, got: {self.input_ref_frame}"
 
         self.controller_type = type
-        self.control_dim = int(np.sum(self.control_axis))
+        self.control_dim = 6 if self.use_ori else 3
 
         # input and output max and min (allow for either explicit lists or single numbers)
         self.input_max = self.nums2array(input_max, self.control_dim)
@@ -217,12 +225,21 @@ class OSCDelta(Controller):
         self.use_nullspace = use_nullspace
 
         # initialize goals based on initial pos / ori
-        self.initial_ee_ori_mat = np.round(self.initial_ee_ori_mat)
-        self.goal_ori = np.array(self.initial_ee_ori_mat)
-        self.goal_pos = np.array(self.initial_ee_pos)
+        # self.initial_ee_ori_mat = np.round(self.initial_ee_ori_mat)
+        # self.goal_ori = np.array(self.initial_ee_ori_mat)
+        # self.goal_pos = np.array(self.initial_ee_pos)
+
+        # self.relative_ori = np.zeros(3)
+        # self.ori_ref = None
+
+        self.goal_pos = None
+        self.goal_ori = None
 
         self.relative_ori = np.zeros(3)
         self.ori_ref = None
+
+        self.origin_ori = None
+        self.origin_pos = None
 
     def set_goal(self, action, set_pos=None, set_ori=None):
         """
@@ -246,26 +263,27 @@ class OSCDelta(Controller):
 
         # # TODO: parse action for variable impedance mode
         # # Parse action based on the impedance mode, and update kp / kd as necessary
-        # if self.impedance_mode == "variable":
-        #     damping_ratio, kp, delta = action[:6], action[6:12], action[12:]
-        #     self.kp = np.clip(kp, self.kp_min, self.kp_max)
-        #     self.kd = 2 * np.sqrt(self.kp) * np.clip(damping_ratio, self.damping_ratio_min, self.damping_ratio_max)
-        # elif self.impedance_mode == "variable_kp":
-        #     kp, delta = action[:6], action[6:]
-        #     self.kp = np.clip(kp, self.kp_min, self.kp_max)
-        #     self.kd = 2 * np.sqrt(self.kp)  # critically damped
-        # else:   # This is case "fixed"
-        #     delta = action
+        if self.impedance_mode == "variable":
+            damping_ratio, kp, delta = action[:6], action[6:12], action[12:]
+            self.kp = np.clip(kp, self.kp_min, self.kp_max)
+            self.kd = 2 * np.sqrt(self.kp) * np.clip(damping_ratio,
+                                                     self.damping_ratio_min, self.damping_ratio_max)
+        elif self.impedance_mode == "variable_kp":
+            kp, delta = action[:6], action[6:]
+            self.kp = np.clip(kp, self.kp_min, self.kp_max)
+            self.kd = 2 * np.sqrt(self.kp)  # critically damped
+        else:   # This is case "fixed"
+            delta = action
 
         # Align actions to corresponding the enabled axis.
         # For example, 3D action space in XZPlane will be assigned to x-translation, z-translation and y-rotation.
-        delta = np.zeros_like(self.control_axis)
-        dim_count = 0
-        for i in range(len(self.control_axis)):
-            if self.control_axis[i] == 1:
-                delta[i] = action[dim_count]
-                dim_count += 1
-        assert dim_count == len(action)
+        # delta = np.zeros_like(self.control_axis)
+        # dim_count = 0
+        # for i in range(len(self.control_axis)):
+            # if self.control_axis[i] == 1:
+            # delta[i] = action[dim_count]
+            # dim_count += 1
+        assert self.control_dim == len(delta)
 
         pos, ori = self._get_desired_pose(delta)
 
@@ -293,20 +311,25 @@ class OSCDelta(Controller):
 
     def _get_desired_pose(self, action):
         # Get base pose
-        if self.controller_mode == 'accumulate':
-            base_pose = T.make_pose(self.goal_pos, self.goal_ori).copy()
-        elif self.controller_mode == 'relative':
-            base_pose = T.make_pose(self.ee_pos, self.ee_ori_mat).copy()
+        if self.input_type == "delta":
+            delta = action
+            scaled_delta = self.scale_action(delta)
+            pos = self.compute_goal_pos(scaled_delta[0:3])
+            if self.use_ori is True:
+                orn = self.compute_goal_ori(scaled_delta[3:6])
+            else:
+                orn = self.compute_goal_ori(np.zeros(3))
+        # Else, interpret actions as absolute values
+        elif self.input_type == "absolute":
+            abs_action = action
+            pos = abs_action[0:3]
+            if self.use_ori is True:
+                orn = Rotation.from_rotvec(
+                    abs_action[3:6]).as_matrix()
+            else:
+                orn = self.compute_goal_ori(np.zeros(3))
         else:
-            assert False, "Error: unsupported controller mode: {}, Available options: accumulate, relative"\
-                .format(self.controller_mode)
-        pos = base_pose[:3, 3]
-        orn = base_pose[:3, :3]
-
-        # Apply translation
-        pos += action[:3] * self.max_translation
-        # Use initial ee_pos if the axis is not enabled
-        pos = np.where(self.control_axis[:3] == 1, pos, self.initial_ee_pos)
+            raise ValueError(f"Unsupport input_type {self.input_type}")
 
         # # Limit desired pose within the bounding box
         if self.position_limits is not None:
@@ -316,25 +339,10 @@ class OSCDelta(Controller):
                 pos = np.minimum(self.position_limits[1], pos)
                 pos = np.maximum(self.position_limits[0], pos)
 
-        if np.all(self.control_axis[3:] == np.array([0, 1, 0])):
-            # Rotation along Y axis only
-            z_axis = orn[:, 2]  # global frame
-            initial_z_axis = self.initial_ee_ori_mat[:, 2]  # global frame
-            # TODO: remove angle_diff
-            rotation_angle = angle_diff(z_axis, initial_z_axis)/180*np.pi
-            rotation_angle *= np.sign(np.cross(initial_z_axis, z_axis)[1])
-            # rotation axis given by positive y-direction in the global frame
-            rotation_angle += action[4] * self.max_rotation
-            orn = (T.quat2mat(T.axisangle2quat(
-                np.array([0, 1, 0])*rotation_angle))).dot(self.initial_ee_ori_mat)
-        elif np.all(self.control_axis[3:] == np.array([1, 1, 1])):
+        if self.use_ori:
             # divide by sqrt(3) because the norm of the max action is larger than dim=1.
             orn = (T.quat2mat(T.axisangle2quat(
                 action[3:] * self.max_rotation/np.sqrt(3)))).dot(orn)
-        elif np.all(self.control_axis[3:] == np.array([0, 0, 0])):
-            orn = self.initial_ee_ori_mat
-        else:
-            raise NotImplementedError
 
         return pos, orn
 
@@ -421,6 +429,125 @@ class OSCDelta(Controller):
 
         return self.torques
 
+    def world_to_origin_frame(self, vec):
+        """
+        transform vector from world to reference coordinate frame
+        """
+
+        # world rotation matrix is just identity
+        world_frame = np.eye(4)
+        world_frame[:3, 3] = vec
+
+        origin_frame = T.make_pose(self.origin_pos, self.origin_ori)
+        origin_frame_inv = T.pose_inv(origin_frame)
+        vec_origin_pose = T.pose_in_A_to_pose_in_B(
+            world_frame, origin_frame_inv)
+        vec_origin_pos, _ = T.mat2pose(vec_origin_pose)
+        return vec_origin_pos
+
+    def goal_origin_to_eef_pose(self):
+        origin_pose = T.make_pose(self.origin_pos, self.origin_ori)
+        ee_pose = T.make_pose(self.ref_pos, self.ref_ori_mat)
+        origin_pose_inv = T.pose_inv(origin_pose)
+        return T.pose_in_A_to_pose_in_B(ee_pose, origin_pose_inv)
+
+    def compute_goal_pos(self, delta, goal_update_mode=None):
+        """
+        Compute new goal position, given a delta to update. Can either update the new goal based on
+        current achieved position or current deisred goal. Updating based on current deisred goal can be useful
+        if we want the robot to adhere with a sequence of target poses as closely as possible,
+        without lagging or overshooting.
+
+        Args:
+            delta (np.array): Desired relative change in position [x, y, z]
+            goal_update_mode (str): either "achieved" (achieved position) or "desired" (desired goal)
+
+        Returns:
+            np.array: updated goal position in the controller frame
+        """
+        if goal_update_mode is None:
+            goal_update_mode = self._goal_update_mode
+        assert goal_update_mode in ["achieved", "desired"]
+
+        if self.goal_pos is None:
+            # if goal is not already set, set it to current position (in controller ref frame)
+            if self.input_ref_frame == "base":
+                self.goal_pos = self.world_to_origin_frame(self.ref_pos)
+            elif self.input_ref_frame == "world":
+                self.goal_pos = self.ref_pos
+            else:
+                raise ValueError
+
+        if goal_update_mode == "desired":
+            # update new goal wrt current desired goal
+            goal_pos = self.goal_pos + delta
+        elif goal_update_mode == "achieved":
+            # update new goal wrt current achieved position
+            if self.input_ref_frame == "base":
+                goal_pos = self.world_to_origin_frame(self.ref_pos) + delta
+            elif self.input_ref_frame == "world":
+                goal_pos = self.ref_pos + delta
+            else:
+                raise ValueError
+
+        if self.position_limits is not None:
+            # to be implemented later
+            raise NotImplementedError
+
+        return goal_pos
+
+    def compute_goal_ori(self, delta, goal_update_mode=None):
+        """
+        Compute new goal orientation, given a delta to update. Can either update the new goal based on
+        current achieved position or current deisred goal. Updating based on current deisred goal can be useful
+        if we want the robot to adhere with a sequence of target poses as closely as possible,
+        without lagging or overshooting.
+
+        Args:
+            delta (np.array): Desired relative change in orientation, in axis-angle form [ax, ay, az]
+            goal_update_mode (str): either "achieved" (achieved position) or "desired" (desired goal)
+
+        Returns:
+            np.array: updated goal orientation in the controller frame
+        """
+        if goal_update_mode is None:
+            goal_update_mode = self._goal_update_mode
+        assert goal_update_mode in ["achieved", "desired"]
+
+        if self.goal_ori is None:
+            # if goal is not already set, set it to current orientation (in controller ref frame)
+            if self.input_ref_frame == "base":
+                self.goal_ori = self.goal_origin_to_eef_pose()[:3, :3]
+            elif self.input_ref_frame == "world":
+                self.goal_ori = self.ref_ori_mat
+            else:
+                raise ValueError
+
+        # convert axis-angle value to rotation matrix
+        quat_error = T.axisangle2quat(delta)
+        rotation_mat_error = T.quat2mat(quat_error)
+
+        if self._goal_update_mode == "desired":
+            # update new goal wrt current desired goal
+            goal_ori = np.dot(rotation_mat_error, self.goal_ori)
+        elif self._goal_update_mode == "achieved":
+            # update new goal wrt current achieved orientation
+            if self.input_ref_frame == "base":
+                curr_goal_ori = self.goal_origin_to_eef_pose()[:3, :3]
+            elif self.input_ref_frame == "world":
+                curr_goal_ori = self.ref_ori_mat
+            else:
+                raise ValueError
+            goal_ori = np.dot(rotation_mat_error, curr_goal_ori)
+        else:
+            raise ValueError
+
+        # check for orientation limits
+        if np.array(self.orientation_limits).any():
+            # to be implemented later
+            raise NotImplementedError
+        return goal_ori
+
     def update_initial_joints(self, initial_joints):
         # First, update from the superclass method
         super().update_initial_joints(initial_joints)
@@ -428,12 +555,19 @@ class OSCDelta(Controller):
         # We also need to reset the goal in case the old goals were set to the initial confguration
         self.reset_goal()
 
-    def reset_goal(self):
+    def reset_goal(self, goal_update_mode="achieved"):
         """
-        Resets the goal to the current state of the robot
+        Resets the goal to the current state of the robot.
+
+        Args:
+            goal_update_mode (str): set mode for updating controller goals,
+                either "achieved" (achieved position) or "desired" (desired goal).
         """
-        self.goal_ori = np.array(self.ee_ori_mat)
-        self.goal_pos = np.array(self.ee_pos)
+        self.goal_ori = np.array(self.ref_ori_mat)
+        self.goal_pos = np.array(self.ref_pos)
+
+        assert goal_update_mode in ["achieved", "desired"]
+        self._goal_update_mode = goal_update_mode
 
         # Also reset interpolators if required
 
@@ -442,10 +576,10 @@ class OSCDelta(Controller):
 
         if self.interpolator_ori is not None:
             # reference is the current orientation at start
-            self.ori_ref = np.array(self.ee_ori_mat)
-            # goal is the total orientation error
+            self.ori_ref = np.array(self.ref_ori_mat)
             self.interpolator_ori.set_goal(
-                orientation_error(self.goal_ori, self.ori_ref))
+                orientation_error(self.goal_ori, self.ori_ref)
+            )  # goal is the total orientation error
             # relative orientation always starts at 0
             self.relative_ori = np.zeros(3)
 

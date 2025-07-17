@@ -214,26 +214,26 @@ class VirtualArm(FixedBaseRobot):
         # deterministic = True
         super().reset(deterministic)
 
-        if not deterministic and self.gripper_type == 'default':
-            if self.close_gripper:
-                gripper_action = 0
-            else:
-                gripper_action = 0.04
-            # Now, reset the gripper if necessary
-            if self.has_gripper:
-                self.sim.data.qpos[
-                    self._ref_gripper_joint_pos_indexes
-                ] = np.array([gripper_action, -gripper_action])  # start with open gripper instead of self.gripper.init_qpos
+        # if not deterministic and self.gripper_type == 'default':
+        #     if self.close_gripper:
+        #         gripper_action = 0
+        #     else:
+        #         gripper_action = 0.04
+        #     # Now, reset the gripper if necessary
+        #     if self.has_gripper:
+        #         self.sim.data.qpos[
+        #             self._ref_gripper_joint_pos_indexes
+        #         ] = np.array([gripper_action, -gripper_action])  # start with open gripper instead of self.gripper.init_qpos
 
-        # Update base pos / ori references in controller
-        self.controller.update_base_pose(self.base_pos, self.base_ori)
+        # # Update base pos / ori references in controller
+        # self.controller.update_base_pose(self.base_pos, self.base_ori)
 
-        # # Setup buffers to hold recent values
-        self.recent_ee_forcetorques = DeltaBuffer(dim=6)
-        self.recent_ee_pose = DeltaBuffer(dim=7)
-        self.recent_ee_vel = DeltaBuffer(dim=6)
-        self.recent_ee_vel_buffer = RingBuffer(dim=6, length=10)
-        self.recent_ee_acc = DeltaBuffer(dim=6)
+        # # # Setup buffers to hold recent values
+        # self.recent_ee_forcetorques = DeltaBuffer(dim=6)
+        # self.recent_ee_pose = DeltaBuffer(dim=7)
+        # self.recent_ee_vel = DeltaBuffer(dim=6)
+        # self.recent_ee_vel_buffer = RingBuffer(dim=6, length=10)
+        # self.recent_ee_acc = DeltaBuffer(dim=6)
 
     def setup_references(self):
         """
@@ -387,55 +387,45 @@ class VirtualArm(FixedBaseRobot):
         pf = self.robot_model.naming_prefix
         modality = f"{pf}proprio"
 
-        # finger-tip
-        @sensor(modality=modality)
-        def eef_pos(obs_cache):
-            return self.controller.ee_pos
+        # # finger-tip
+        # @sensor(modality=modality)
+        # def eef_pos(obs_cache):
+        #     return self.part_controllers["right"].ee_pos
 
-        @sensor(modality=modality)
-        def eef_quat(obs_cache):
-            return T.convert_quat(T.mat2quat(self.controller.ee_ori_mat), to='wxyz')
+        # @sensor(modality=modality)
+        # def eef_quat(obs_cache):
+        #     return T.convert_quat(T.mat2quat(self.part_controllers["right"].ee_ori_mat), to='wxyz')
 
-        @sensor(modality=modality)
-        def eef_pos_vel(obs_cache):
-            return self.controller.ee_pos_vel
+        # @sensor(modality=modality)
+        # def eef_pos_vel(obs_cache):
+        #     return self.part_controllers["right"].ee_pos_vel
 
-        @sensor(modality=modality)
-        def eef_ori_vel(obs_cache):
-            return self.controller.ee_ori_vel
+        # @sensor(modality=modality)
+        # def eef_ori_vel(obs_cache):
+        #     return self.part_controllers["right"].ee_ori_vel
 
-        @sensor(modality=modality)
-        def joint_torque(obs_cache):
-            return self.controller.torques
+        # @sensor(modality=modality)
+        # def joint_torque(obs_cache):
+        #     return self.part_controllers["right"].torques
 
-        sensors = [eef_pos, eef_quat, eef_pos_vel, eef_ori_vel, joint_torque]
-        names = [f"{pf}eef_pos", f"{pf}eef_quat", f"{pf}eef_pos_vel",
-                 f"{pf}eef_ori_vel", f"{pf}joint_torque"]
+        # sensors = [eef_pos, eef_quat, eef_pos_vel, eef_ori_vel, joint_torque]
+        # names = [f"{pf}eef_pos", f"{pf}eef_quat", f"{pf}eef_pos_vel",
+        #          f"{pf}eef_ori_vel", f"{pf}joint_torque"]
 
-        if 'OSC' in self.controller.name:
+        if 'OSC' in self.part_controllers["right"].name:
             @sensor(modality=modality)
             def osc_desired_pos(obs_cache):
-                return self.controller.goal_pos
+                return self.part_controllers["right"].goal_pos
 
             @sensor(modality=modality)
             def osc_desired_quat(obs_cache):
-                return T.convert_quat(T.mat2quat(self.controller.goal_ori), to='wxyz')
+                return T.convert_quat(T.mat2quat(self.part_controllers["right"].goal_ori), to='wxyz')
 
-            sensors += [osc_desired_pos, osc_desired_quat]
-            names += [f"{pf}osc_desired_pos", f"{pf}osc_desired_quat"]
+            # sensors += [osc_desired_pos, osc_desired_quat]4
+            sensors = [osc_desired_pos, osc_desired_quat]
 
-        # add in gripper sensors of the finger movement if this robot has a gripper
-        if self.has_gripper:
-            @sensor(modality=modality)
-            def gripper_qpos(obs_cache):
-                return np.array([self.sim.data.qpos[x] for x in self._ref_gripper_joint_pos_indexes])
-
-            @sensor(modality=modality)
-            def gripper_qvel(obs_cache):
-                return np.array([self.sim.data.qvel[x] for x in self._ref_gripper_joint_vel_indexes])
-
-            sensors += [gripper_qpos, gripper_qvel]
-            names += [f"{pf}gripper_qpos", f"{pf}gripper_qvel"]
+            # names += [f"{pf}osc_desired_pos", f"{pf}osc_desired_quat"]
+            names = [f"{pf}osc_desired_pos", f"{pf}osc_desired_quat"]
 
         # Create observables for this robot
         for name, s in zip(names, sensors):
@@ -460,25 +450,25 @@ class VirtualArm(FixedBaseRobot):
                 dof += gripper.dof
         return dof
 
-    @property
-    def action_limits(self):
-        """
-        Action lower/upper limits per dimension.
+    # @property
+    # def action_limits(self):
+    #     """
+    #     Action lower/upper limits per dimension.
 
-        Returns:
-            2-tuple:
+    #     Returns:
+    #         2-tuple:
 
-                - (np.array) minimum (low) action values
-                - (np.array) maximum (high) action values
-        """
-        # Action limits based on controller limits
-        low, high = ([-1] * self.gripper.dof, [1] *
-                     self.gripper.dof) if self.control_gripper else ([], [])
-        low_c, high_c = self.controller.control_limits
-        low = np.concatenate([low_c, low])
-        high = np.concatenate([high_c, high])
+    #             - (np.array) minimum (low) action values
+    #             - (np.array) maximum (high) action values
+    #     """
+    #     # Action limits based on controller limits
+    #     low, high = ([-1] * self.gripper.dof, [1] *
+    #                  self.gripper.dof) if self.control_gripper else ([], [])
+    #     low_c, high_c = self.controller.control_limits
+    #     low = np.concatenate([low_c, low])
+    #     high = np.concatenate([high_c, high])
 
-        return low, high
+    #     return low, high
 
     @property
     def ee_ft_integral(self):

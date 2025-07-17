@@ -22,6 +22,8 @@
             <inertial diaginertia="0 0 0" mass="0" pos="0 0 0"/>
             <!-- mount attached here -->
             <body name="dumb_link0" pos="0 0 0">
+                <site name="right_center" pos="0 0 0" size="0.01" rgba="1 0.3 0.3 1" group="2"/>
+
                 <inertial pos="0 0 0.05" mass="0.0001" diaginertia="0.0001 0.0001 0.0001" />
                 <joint type="slide" pos="0 0 0" axis="1 0 0" name="slide_joint0"/>
                 <body name="dumb_link1" pos="0 0 0" quat="1 0 0 0">

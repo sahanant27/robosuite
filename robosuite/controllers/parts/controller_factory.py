@@ -52,7 +52,8 @@ def load_part_controller_config(custom_fpath=None, default_controller=None):
 
         # Store the default controller config fpath associated with the requested controller
         custom_fpath = os.path.join(
-            os.path.dirname(__file__), "..", "config/default/parts/{}.json".format(default_controller.lower())
+            os.path.dirname(
+                __file__), "..", "config/default/parts/{}.json".format(default_controller.lower())
         )
 
     # Assert that the fpath to load the controller is not empty
@@ -63,7 +64,8 @@ def load_part_controller_config(custom_fpath=None, default_controller=None):
         with open(custom_fpath) as f:
             controller_config = json.load(f)
     except FileNotFoundError:
-        print("Error opening controller filepath at: {}. " "Please check filepath and try again.".format(custom_fpath))
+        print("Error opening controller filepath at: {}. " "Please check filepath and try again.".format(
+            custom_fpath))
         raise FileNotFoundError
 
     # Return the loaded controller
@@ -101,7 +103,8 @@ def arm_controller_factory(name, params):
     if name == "OSC_POSE":
         ori_interpolator = None
         if interpolator is not None:
-            interpolator.set_states(dim=3)  # EE control uses dim 3 for pos and ori each
+            # EE control uses dim 3 for pos and ori each
+            interpolator.set_states(dim=3)
             ori_interpolator = deepcopy(interpolator)
             ori_interpolator.set_states(ori="euler")
         params["control_ori"] = True
@@ -118,7 +121,8 @@ def arm_controller_factory(name, params):
     if name == "IK_POSE":
         ori_interpolator = None
         if interpolator is not None:
-            interpolator.set_states(dim=3)  # EE IK control uses dim 3 for pos and dim 4 for ori
+            # EE IK control uses dim 3 for pos and dim 4 for ori
+            interpolator.set_states(dim=3)
             ori_interpolator = deepcopy(interpolator)
             ori_interpolator.set_states(dim=4, ori="quat")
 
@@ -138,6 +142,9 @@ def arm_controller_factory(name, params):
 
     if name == "JOINT_TORQUE":
         return generic.JointTorqueController(interpolator=interpolator, **params)
+
+    if name == "OSC_customized_6D" or name == "None":
+        return arm_controllers.OSCDelta(**params)
 
     raise ValueError("Unknown controller name: {}".format(name))
 

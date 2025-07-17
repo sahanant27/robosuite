@@ -20,7 +20,8 @@ def register_composite_controller(target_class):
         ROBOSUITE_DEFAULT_LOGGER.warning(
             "The name of the composite controller is not specified. Using the class name as the key."
         )
-        key = "_".join(re.sub(r"([A-Z0-9])", r" \1", target_class.__name__).split()).upper()
+        key = "_".join(re.sub(r"([A-Z0-9])", r" \1",
+                       target_class.__name__).split()).upper()
     else:
         key = target_class.name
     REGISTERED_COMPOSITE_CONTROLLERS_DICT[key] = target_class
@@ -54,7 +55,8 @@ class CompositeController:
         self, part_controller_config, composite_controller_specific_config: Optional[Dict] = None
     ):
         self.composite_controller_specific_config = composite_controller_specific_config
-        body_part_ordering = self.composite_controller_specific_config.get("body_part_ordering", None)
+        body_part_ordering = self.composite_controller_specific_config.get(
+            "body_part_ordering", None)
         if body_part_ordering is not None:
             self.part_controller_config = OrderedDict()
             assert len(body_part_ordering) == len(part_controller_config)
@@ -111,7 +113,8 @@ class CompositeController:
         self._applied_action_dict.clear()
         for part_name, controller in self.part_controllers.items():
             if enabled_parts.get(part_name, False):
-                self._applied_action_dict[part_name] = controller.run_controller()
+                self._applied_action_dict[part_name] = controller.run_controller(
+                )
 
         return self._applied_action_dict
 
@@ -141,15 +144,18 @@ class CompositeController:
         """
         naming_prefix = self.part_controllers[controller_name].naming_prefix
         part_name = self.part_controllers[controller_name].part_name
-        base_pos = np.array(self.sim.data.site_xpos[self.sim.model.site_name2id(f"{naming_prefix}{part_name}_center")])
+        base_pos = np.array(self.sim.data.site_xpos[self.sim.model.site_name2id(
+            f"{naming_prefix}{part_name}_center")])
         base_ori = np.array(
-            self.sim.data.site_xmat[self.sim.model.site_name2id(f"{naming_prefix}{part_name}_center")].reshape([3, 3])
+            self.sim.data.site_xmat[self.sim.model.site_name2id(
+                f"{naming_prefix}{part_name}_center")].reshape([3, 3])
         )
         return base_pos, base_ori
 
     def update_state(self):
         for arm in self.arms:
-            base_pos, base_ori = self.get_controller_base_pose(controller_name=arm)
+            base_pos, base_ori = self.get_controller_base_pose(
+                controller_name=arm)
             self.part_controllers[arm].update_origin(base_pos, base_ori)
 
     def get_controller(self, part_name):
@@ -161,15 +167,19 @@ class CompositeController:
         for part_name, controller in self.part_controllers.items():
             if part_name not in self.arms:
                 if part_name in self.grippers.keys():
-                    low_g, high_g = ([-1] * self.grippers[part_name].dof, [1] * self.grippers[part_name].dof)
-                    low, high = np.concatenate([low, low_g]), np.concatenate([high, high_g])
+                    low_g, high_g = (
+                        [-1] * self.grippers[part_name].dof, [1] * self.grippers[part_name].dof)
+                    low, high = np.concatenate(
+                        [low, low_g]), np.concatenate([high, high_g])
                 else:
                     control_dim = controller.control_dim
                     low_c, high_c = ([-1] * control_dim, [1] * control_dim)
-                    low, high = np.concatenate([low, low_c]), np.concatenate([high, high_c])
+                    low, high = np.concatenate(
+                        [low, low_c]), np.concatenate([high, high_c])
             else:
                 low_c, high_c = controller.control_limits
-                low, high = np.concatenate([low, low_c]), np.concatenate([high, high_c])
+                low, high = np.concatenate(
+                    [low, low_c]), np.concatenate([high, high_c])
         return low, high
 
 
@@ -219,7 +229,8 @@ class HybridMobileBase(CompositeController):
         full_action_vector = np.zeros(self.action_limits[0].shape)
         for (part_name, action_vector) in action_dict.items():
             if part_name not in self._action_split_indexes:
-                ROBOSUITE_DEFAULT_LOGGER.debug(f"{part_name} is not specified in the action space")
+                ROBOSUITE_DEFAULT_LOGGER.debug(
+                    f"{part_name} is not specified in the action space")
                 continue
             start_idx, end_idx = self._action_split_indexes[part_name]
             if end_idx - start_idx == 0:
@@ -266,7 +277,8 @@ class WholeBody(CompositeController):
 
         Examples of joint_action_policy could be an IK policy, a neural network policy, a model predictive controller, etc.
         """
-        raise NotImplementedError("WholeBody CompositeController requires a joint action policy")
+        raise NotImplementedError(
+            "WholeBody CompositeController requires a joint action policy")
 
     def setup_action_split_idx(self):
         """
@@ -285,7 +297,8 @@ class WholeBody(CompositeController):
                 import ipdb
 
                 ipdb.set_trace()
-                raise KeyError(f"Part name '{part_name}' not found in part_controllers: {e}")
+                raise KeyError(
+                    f"Part name '{part_name}' not found in part_controllers: {e}")
             self._action_split_indexes[part_name] = (previous_idx, last_idx)
             previous_idx = last_idx
 
@@ -295,7 +308,8 @@ class WholeBody(CompositeController):
                     last_idx += self.grippers[part_name].dof
                 else:
                     last_idx += controller.control_dim
-                self._action_split_indexes[part_name] = (previous_idx, last_idx)
+                self._action_split_indexes[part_name] = (
+                    previous_idx, last_idx)
                 previous_idx = last_idx
 
         self.setup_whole_body_controller_action_split_idx()
@@ -308,10 +322,12 @@ class WholeBody(CompositeController):
         underlying factorized controllers.
         """
         # add joint_action_policy's action split indexes first
-        self._whole_body_controller_action_split_indexes.update(self.joint_action_policy.action_split_indexes())
+        self._whole_body_controller_action_split_indexes.update(
+            self.joint_action_policy.action_split_indexes())
 
         # prev and last index correspond to the IK solver indexes' last index
-        previous_idx = last_idx = list(self._whole_body_controller_action_split_indexes.values())[-1][-1]
+        previous_idx = last_idx = list(
+            self._whole_body_controller_action_split_indexes.values())[-1][-1]
         for part_name, controller in self.part_controllers.items():
             if part_name in self.composite_controller_specific_config["actuation_part_names"]:
                 continue
@@ -319,13 +335,16 @@ class WholeBody(CompositeController):
                 last_idx += self.grippers[part_name].dof
             else:
                 last_idx += controller.control_dim
-            self._whole_body_controller_action_split_indexes[part_name] = (previous_idx, last_idx)
+            self._whole_body_controller_action_split_indexes[part_name] = (
+                previous_idx, last_idx)
             previous_idx = last_idx
 
     def set_goal(self, all_action):
-        target_qpos = self.joint_action_policy.solve(all_action[: self.joint_action_policy.control_dim])
+        target_qpos = self.joint_action_policy.solve(
+            all_action[: self.joint_action_policy.control_dim])
         # create new all_action vector with the IK solver's actions first
-        all_action = np.concatenate([target_qpos, all_action[self.joint_action_policy.control_dim :]])
+        all_action = np.concatenate(
+            [target_qpos, all_action[self.joint_action_policy.control_dim:]])
         for part_name, controller in self.part_controllers.items():
             start_idx, end_idx = self._action_split_indexes[part_name]
             action = all_action[start_idx:end_idx]
@@ -346,29 +365,35 @@ class WholeBody(CompositeController):
         low, high = [], []
         # assumption: IK solver's actions come first
         low_c, high_c = self.joint_action_policy.control_limits
-        low, high = np.concatenate([low, low_c]), np.concatenate([high, high_c])
+        low, high = np.concatenate(
+            [low, low_c]), np.concatenate([high, high_c])
         for part_name, controller in self.part_controllers.items():
             # Exclude terms that the IK solver handles
             if part_name in self.composite_controller_specific_config["actuation_part_names"]:
                 continue
             if part_name not in self.arms:
                 if part_name in self.grippers.keys():
-                    low_g, high_g = ([-1] * self.grippers[part_name].dof, [1] * self.grippers[part_name].dof)
-                    low, high = np.concatenate([low, low_g]), np.concatenate([high, high_g])
+                    low_g, high_g = (
+                        [-1] * self.grippers[part_name].dof, [1] * self.grippers[part_name].dof)
+                    low, high = np.concatenate(
+                        [low, low_g]), np.concatenate([high, high_g])
                 else:
                     control_dim = controller.control_dim
                     low_c, high_c = ([-1] * control_dim, [1] * control_dim)
-                    low, high = np.concatenate([low, low_c]), np.concatenate([high, high_c])
+                    low, high = np.concatenate(
+                        [low, low_c]), np.concatenate([high, high_c])
             else:
                 low_c, high_c = controller.control_limits
-                low, high = np.concatenate([low, low_c]), np.concatenate([high, high_c])
+                low, high = np.concatenate(
+                    [low, low_c]), np.concatenate([high, high_c])
         return low, high
 
     def create_action_vector(self, action_dict: Dict[str, np.ndarray]) -> np.ndarray:
         full_action_vector = np.zeros(self.action_limits[0].shape)
         for (part_name, action_vector) in action_dict.items():
             if part_name not in self._whole_body_controller_action_split_indexes:
-                ROBOSUITE_DEFAULT_LOGGER.debug(f"{part_name} is not specified in the action space")
+                ROBOSUITE_DEFAULT_LOGGER.debug(
+                    f"{part_name} is not specified in the action space")
                 continue
             start_idx, end_idx = self._whole_body_controller_action_split_indexes[part_name]
             if end_idx - start_idx == 0:
@@ -388,15 +413,18 @@ class WholeBody(CompositeController):
             action_index_info.append(f"{part_name}: {start_idx}:{end_idx}")
 
         action_dim_info_str = ", ".join(action_dim_info)
-        ROBOSUITE_DEFAULT_LOGGER.info(f"Action Dimensions: [{action_dim_info_str}]")
+        ROBOSUITE_DEFAULT_LOGGER.info(
+            f"Action Dimensions: [{action_dim_info_str}]")
 
         action_index_info_str = ", ".join(action_index_info)
-        ROBOSUITE_DEFAULT_LOGGER.info(f"Action Indices: [{action_index_info_str}]")
+        ROBOSUITE_DEFAULT_LOGGER.info(
+            f"Action Indices: [{action_index_info_str}]")
 
     def print_action_info_dict(self, name: str = ""):
         info_dict = {}
         info_dict["Action Dimension"] = self.action_limits[0].shape
-        info_dict.update(dict(self._whole_body_controller_action_split_indexes))
+        info_dict.update(
+            dict(self._whole_body_controller_action_split_indexes))
 
         info_dict_str = f"\nAction Info for {name}:\n\n{json.dumps(dict(info_dict), indent=4)}"
         ROBOSUITE_DEFAULT_LOGGER.info(info_dict_str)
@@ -411,7 +439,8 @@ class WholeBodyIK(WholeBody):
 
     def _validate_composite_controller_specific_config(self) -> None:
         # Check that all actuation_part_names exist in part_controllers
-        original_ik_controlled_parts = self.composite_controller_specific_config["actuation_part_names"]
+        original_ik_controlled_parts = self.composite_controller_specific_config[
+            "actuation_part_names"]
         self.valid_ik_controlled_parts = []
         valid_ref_names = []
 
@@ -432,7 +461,8 @@ class WholeBodyIK(WholeBody):
         self.composite_controller_specific_config["actuation_part_names"] = self.valid_ik_controlled_parts
 
         # Loop through ref_names and validate against mujoco model
-        original_ref_names = self.composite_controller_specific_config.get("ref_name", [])
+        original_ref_names = self.composite_controller_specific_config.get(
+            "ref_name", [])
         for ref_name in original_ref_names:
             if ref_name in self.sim.model.site_names:  # Check if the site exists in the mujoco model
                 valid_ref_names.append(ref_name)
@@ -456,7 +486,8 @@ class WholeBodyIK(WholeBody):
                 )
 
         # Compute nullspace gains, Kn.
-        Kn = get_nullspace_gains(joint_names, self.composite_controller_specific_config["nullspace_joint_weights"])
+        Kn = get_nullspace_gains(
+            joint_names, self.composite_controller_specific_config["nullspace_joint_weights"])
         mocap_bodies = []
         robot_config = {
             "end_effector_sites": self.composite_controller_specific_config["ref_name"],
@@ -468,11 +499,18 @@ class WholeBodyIK(WholeBody):
             model=self.sim.model._model,
             data=self.sim.data._data,
             robot_config=robot_config,
-            damping=self.composite_controller_specific_config.get("ik_pseudo_inverse_damping", 5e-2),
-            integration_dt=self.composite_controller_specific_config.get("ik_integration_dt", 0.1),
-            max_dq=self.composite_controller_specific_config.get("ik_max_dq", 4),
-            max_dq_torso=self.composite_controller_specific_config.get("ik_max_dq_torso", 0.2),
-            input_rotation_repr=self.composite_controller_specific_config.get("ik_input_rotation_repr", "axis_angle"),
-            input_type=self.composite_controller_specific_config.get("ik_input_type", "axis_angle"),
-            debug=self.composite_controller_specific_config.get("verbose", False),
+            damping=self.composite_controller_specific_config.get(
+                "ik_pseudo_inverse_damping", 5e-2),
+            integration_dt=self.composite_controller_specific_config.get(
+                "ik_integration_dt", 0.1),
+            max_dq=self.composite_controller_specific_config.get(
+                "ik_max_dq", 4),
+            max_dq_torso=self.composite_controller_specific_config.get(
+                "ik_max_dq_torso", 0.2),
+            input_rotation_repr=self.composite_controller_specific_config.get(
+                "ik_input_rotation_repr", "axis_angle"),
+            input_type=self.composite_controller_specific_config.get(
+                "ik_input_type", "axis_angle"),
+            debug=self.composite_controller_specific_config.get(
+                "verbose", False),
         )
