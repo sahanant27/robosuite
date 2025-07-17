@@ -1,0 +1,57 @@
+<mujoco model="virtual">
+    <actuator>
+        <!-- Physical limits of the actuator. -->
+        <motor ctrllimited="true" ctrlrange="-10.0 10.0" joint="slide_joint0" name="torq_j1"/>
+        <motor ctrllimited="true" ctrlrange="-10.0 10.0" joint="slide_joint1" name="torq_j2"/>
+        <motor ctrllimited="true" ctrlrange="-10.0 10.0" joint="slide_joint2" name="torq_j3"/>
+        <motor ctrllimited="true" ctrlrange="-10.0 10.0" joint="hinge_joint0" name="torq_j4"/>
+        <motor ctrllimited="true" ctrlrange="-10.0 10.0" joint="hinge_joint1" name="torq_j5"/>
+        <motor ctrllimited="true" ctrlrange="-10.0 10.0" joint="hinge_joint2" name="torq_j6"/>
+
+        <!-- <motor ctrllimited="true" ctrlrange="-80.0 80.0" joint="joint2" name="torq_j2"/>
+        <motor ctrllimited="true" ctrlrange="-80.0 80.0" joint="joint3" name="torq_j3"/>
+        <motor ctrllimited="true" ctrlrange="-80.0 80.0" joint="joint4" name="torq_j4"/>
+        <motor ctrllimited="true" ctrlrange="-80.0 80.0" joint="joint5" name="torq_j5"/>
+        <motor ctrllimited="true" ctrlrange="-12.0 12.0" joint="joint6" name="torq_j6"/>
+        <motor ctrllimited="true" ctrlrange="-12.0 12.0" joint="joint7" name="torq_j7"/> -->
+    </actuator>
+    <worldbody>
+        <body name="base" pos="0 0 0">
+            <!-- robot view -->
+            <camera mode="fixed" name="robotview" pos="1.0 0 0.4" quat="0.653 0.271 0.271 0.653"/>
+            <inertial diaginertia="0 0 0" mass="0" pos="0 0 0"/>
+            <!-- mount attached here -->
+            <body name="dumb_link0" pos="0 0 0">
+                <inertial pos="0 0 0.05" mass="0.0001" diaginertia="0.0001 0.0001 0.0001" />
+                <joint type="slide" pos="0 0 0" axis="1 0 0" name="slide_joint0"/>
+                <body name="dumb_link1" pos="0 0 0" quat="1 0 0 0">
+                    <inertial pos="0 0 0" mass="0.0001" diaginertia="0.0001 0.0001 0.0001" />
+                    <joint type="slide" pos="0 0 0" axis="0 1 0" name="slide_joint1"/>
+                    <body name="dumb_link2" pos="0 0 0" quat="1 0 0 0">
+                        <inertial pos="0 0 0" mass="0.0001" diaginertia="0.0001 0.0001 0.0001" />
+                        <joint type="slide" pos="0 0 0" axis="0 0 1" name="slide_joint2"/>
+                        <body name="dumb_link3" pos="0 0 0" quat="1 0 0 0">
+                            <inertial pos="0 0 0" mass="0.0001" diaginertia="0.0001 0.0001 0.0001" />
+                            <joint type="hinge" pos="0 0 0" axis="1 0 0" name="hinge_joint0"/>
+                            <body name="dumb_link4" pos="0 0 0" quat="1 0 0 0">
+                                <inertial pos="0 0 0" mass="0.0001" diaginertia="0.0001 0.0001 0.0001" />
+                                <joint type="hinge" pos="0 0 0" axis="0 1 0" name="hinge_joint1"/>
+                                <body name="dumb_link5" pos="0 0 0" quat="1 0 0 0">
+                                    <!-- <geom type="sphere" contype="0" size="0.1 0 0" conaffinity="0" group="0" name="temp" rgba="1 0 0 1" /> -->
+                                    <inertial pos="0 0 0" mass="0.0001" diaginertia="0.0001 0.0001 0.0001" />
+                                    <joint type="hinge" pos="0 0 0" axis="0 0 1" name="hinge_joint2"/>
+                                    <body name="right_hand" pos="0 0 0" quat="1 0 0 0">
+                                        <inertial pos="0 0 0" mass="0.0001" diaginertia="0.0001 0.0001 0.0001" />
+                                        <!-- This camera points out from the eef. -->
+                                        <camera mode="fixed" name="eye_in_hand" pos="0.05 0 0" quat="0 0.707108 0.707108 0" fovy="75"/>
+                                        <!-- to add gripper -->
+                                    </body>
+                                </body>
+                            </body>
+                        </body>
+                    </body>
+                </body>
+            </body>
+        </body>
+    </worldbody>
+</mujoco>

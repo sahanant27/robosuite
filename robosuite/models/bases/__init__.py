@@ -27,6 +27,7 @@ BASE_MAPPING = {
     "Spot": Spot,
     "SpotFloating": SpotFloating,
     "NullBase": NullBase,
+    None: NullMount
 }
 
 ALL_BASES = BASE_MAPPING.keys()

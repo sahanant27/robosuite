@@ -2,6 +2,7 @@ from .fixed_base_robot import FixedBaseRobot
 from .mobile_robot import MobileRobot
 from .wheeled_robot import WheeledRobot
 from .legged_robot import LeggedRobot
+from .virtual_arm import VirtualArm
 
 from robosuite.models.robots.robot_model import REGISTERED_ROBOTS
 
@@ -31,6 +32,7 @@ ROBOT_CLASS_MAPPING = {
     "PandaDexRH": FixedBaseRobot,
     "PandaDexLH": FixedBaseRobot,
     "XArm7": FixedBaseRobot,
+    "Virtual": VirtualArm,
 }
 
 target_type_mapping = {
@@ -44,7 +46,8 @@ target_type_mapping = {
 def register_robot_class(target_type, **kwargs):
     def decorator(target_class):
         # Store the class in the registry with additional arguments
-        ROBOT_CLASS_MAPPING.update({target_class.__name__: target_type_mapping[target_type]})
+        ROBOT_CLASS_MAPPING.update(
+            {target_class.__name__: target_type_mapping[target_type]})
 
         return target_class  # Return the class itself
 
