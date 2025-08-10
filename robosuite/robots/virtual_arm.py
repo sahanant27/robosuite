@@ -115,6 +115,7 @@ class VirtualArm(FixedBaseRobot):
             control_freq=control_freq,
             composite_controller_config=composite_controller_config,
             gripper_type=gripper_type,
+            lite_physics=lite_physics,
         )
 
     # def _load_controller(self):
@@ -272,67 +273,69 @@ class VirtualArm(FixedBaseRobot):
 
         Raises:
             AssertionError: [Invalid action dimension]
-        """
-        # clip actions into valid range
-        assert len(action) == self.action_dim, \
-            "environment got invalid action dimension -- expected {}, got {}".format(
-                self.action_dim, len(action))
+        # """
+        # # clip actions into valid range
+        # assert len(action) == self.action_dim, \
+        #     "environment got invalid action dimension -- expected {}, got {}".format(
+        #         self.action_dim, len(action))
 
-        gripper_action = None
-        if self.control_gripper:
-            # all indexes past controller dimension indexes
-            gripper_action = action[self.controller.control_dim:]
-            arm_action = action[:self.controller.control_dim]
-        else:
-            arm_action = action
+        # gripper_action = None
+        # if self.control_gripper:
+        #     # all indexes past controller dimension indexes
+        #     gripper_action = action[self.controller.control_dim:]
+        #     arm_action = action[:self.controller.control_dim]
+        # else:
+        #     arm_action = action
 
-        # Update the controller goal if this is a new policy step
-        if policy_step:
-            self.controller.set_goal(arm_action)
+        # # Update the controller goal if this is a new policy step
+        # if policy_step:
+        #     self.controller.set_goal(arm_action)
 
-        # Now run the controller for a step
-        torques = self.controller.run_controller()
+        # # Now run the controller for a step
+        # torques = self.controller.run_controller()
 
-        # Clip the torques
-        low, high = self.torque_limits
-        self.torques = np.clip(torques, low, high)
+        # # Clip the torques
+        # low, high = self.torque_limits
+        # self.torques = np.clip(torques, low, high)
 
-        # Get gripper action, if applicable
-        if self.control_gripper:
-            self.grip_action(gripper=self.gripper,
-                             gripper_action=gripper_action)
-        else:
-            if self.close_gripper:
-                gripper_action = 1
-            else:
-                gripper_action = -1
-            self.grip_action(gripper=self.gripper,
-                             gripper_action=[gripper_action])
+        # # Get gripper action, if applicable
+        # if self.control_gripper:
+        #     self.grip_action(gripper=self.gripper,
+        #                      gripper_action=gripper_action)
+        # else:
+        #     if self.close_gripper:
+        #         gripper_action = 1
+        #     else:
+        #         gripper_action = -1
+        #     self.grip_action(gripper=self.gripper,
+        #                      gripper_action=[gripper_action])
 
-        # Apply joint torque control
-        self.sim.data.ctrl[self._ref_joint_actuator_indexes] = self.torques
+        # # Apply joint torque control
+        # self.sim.data.ctrl[self._ref_joint_actuator_indexes] = self.torques
 
-        # If this is a policy step, also update buffers holding recent values of interest
-        if policy_step:
-            # Update proprioceptive values
-            self.recent_qpos.push(self._joint_positions)
-            self.recent_actions.push(action)
-            self.recent_torques.push(self.torques)
-            self.recent_ee_forcetorques.push(np.concatenate(
-                (self.ee_force, self.ee_torque)))  # gripper base
-            self.recent_ee_pose.push(np.concatenate(
-                (self.controller.ee_pos, T.mat2quat(self.controller.ee_ori_mat))))  # grip_site
-            self.recent_ee_vel.push(np.concatenate(
-                (self.controller.ee_pos_vel, self.controller.ee_ori_vel)))  # grip_site
+        # # If this is a policy step, also update buffers holding recent values of interest
+        # if policy_step:
+        #     # Update proprioceptive values
+        #     self.recent_qpos.push(self._joint_positions)
+        #     self.recent_actions.push(action)
+        #     self.recent_torques.push(self.torques)
+        #     self.recent_ee_forcetorques.push(np.concatenate(
+        #         (self.ee_force, self.ee_torque)))  # gripper base
+        #     self.recent_ee_pose.push(np.concatenate(
+        #         (self.controller.ee_pos, T.mat2quat(self.controller.ee_ori_mat))))  # grip_site
+        #     self.recent_ee_vel.push(np.concatenate(
+        #         (self.controller.ee_pos_vel, self.controller.ee_ori_vel)))  # grip_site
 
-            # Estimation of eef acceleration (averaged derivative of recent velocities)
-            self.recent_ee_vel_buffer.push(np.concatenate(
-                (self.controller.ee_pos_vel, self.controller.ee_ori_vel)))
-            diffs = np.vstack([self.recent_ee_acc.current,
-                               self.control_freq * np.diff(self.recent_ee_vel_buffer.buf, axis=0)])
-            ee_acc = np.array([np.convolve(col, np.ones(
-                10) / 10., mode='valid')[0] for col in diffs.transpose()])
-            self.recent_ee_acc.push(ee_acc)
+        #     # Estimation of eef acceleration (averaged derivative of recent velocities)
+        #     self.recent_ee_vel_buffer.push(np.concatenate(
+        #         (self.controller.ee_pos_vel, self.controller.ee_ori_vel)))
+        #     diffs = np.vstack([self.recent_ee_acc.current,
+        #                        self.control_freq * np.diff(self.recent_ee_vel_buffer.buf, axis=0)])
+        #     ee_acc = np.array([np.convolve(col, np.ones(
+        #         10) / 10., mode='valid')[0] for col in diffs.transpose()])
+        #     self.recent_ee_acc.push(ee_acc)
+
+        super().control(action, policy_step)
 
     def grip_action(self, gripper, gripper_action):
         """
@@ -371,7 +374,8 @@ class VirtualArm(FixedBaseRobot):
         Args:
             visible (bool): True if visualizing the gripper for this arm.
         """
-        self.gripper.set_sites_visibility(sim=self.sim, visible=visible)
+        self.gripper["right"].set_sites_visibility(
+            sim=self.sim, visible=visible)
 
     def setup_observables(self):
         """
@@ -470,95 +474,95 @@ class VirtualArm(FixedBaseRobot):
 
     #     return low, high
 
-    @property
-    def ee_ft_integral(self):
-        """
-        Returns:
-            np.array: the integral over time of the applied ee force-torque
-        """
-        return np.abs((1.0 / self.control_freq) * self.recent_ee_forcetorques.average)
+    # @property
+    # def ee_ft_integral(self):
+    #     """
+    #     Returns:
+    #         np.array: the integral over time of the applied ee force-torque
+    #     """
+    #     return np.abs((1.0 / self.control_freq) * self.recent_ee_forcetorques.average)
 
-    @property
-    def ee_force(self):
-        """
-        Returns:
-            np.array: force applied at the force sensor at the robot arm's eef
-        """
-        return self.get_sensor_measurement(self.gripper.important_sensors["force_ee"])
+    # @property
+    # def ee_force(self):
+    #     """
+    #     Returns:
+    #         np.array: force applied at the force sensor at the robot arm's eef
+    #     """
+    #     return self.get_sensor_measurement(self.gripper.important_sensors["force_ee"])
 
-    @property
-    def ee_torque(self):
-        """
-        Returns torque applied at the torque sensor at the robot arm's eef
-        """
-        return self.get_sensor_measurement(self.gripper.important_sensors["torque_ee"])
+    # @property
+    # def ee_torque(self):
+    #     """
+    #     Returns torque applied at the torque sensor at the robot arm's eef
+    #     """
+    #     return self.get_sensor_measurement(self.gripper.important_sensors["torque_ee"])
 
-    @property
-    def _hand_pose(self):
-        """
-        Returns:
-            np.array: (4,4) array corresponding to the eef pose in base frame of robot.
-        """
-        return self.pose_in_base_from_name(self.robot_model.eef_name)
+    # @property
+    # def _hand_pose(self):
+    #     """
+    #     Returns:
+    #         np.array: (4,4) array corresponding to the eef pose in base frame of robot.
+    #     """
+    #     return self.pose_in_base_from_name(self.robot_model.eef_name)
 
-    @property
-    def _hand_quat(self):
-        """
-        Returns:
-            np.array: (x,y,z,w) eef quaternion in base frame of robot.
-        """
-        return T.mat2quat(self._hand_orn)
+    # @property
+    # def _hand_quat(self):
+    #     """
+    #     Returns:
+    #         np.array: (x,y,z,w) eef quaternion in base frame of robot.
+    #     """
+    #     return T.mat2quat(self._hand_orn)
 
-    @property
-    def _hand_total_velocity(self):
-        """
-        Returns:
-            np.array: 6-array representing the total eef velocity (linear + angular) in the base frame
-        """
+    # @property
+    # def _hand_total_velocity(self):
+    #     """
+    #     Returns:
+    #         np.array: 6-array representing the total eef velocity (linear + angular) in the base frame
+    #     """
 
-        # Use jacobian to translate joint velocities to end effector velocities.
-        Jp = self.sim.data.get_body_jacp(
-            self.robot_model.eef_name).reshape((3, -1))
-        Jp_joint = Jp[:, self._ref_joint_vel_indexes]
+    #     # Use jacobian to translate joint velocities to end effector velocities.
+    #     Jp = self.sim.data.get_body_jacp(
+    #         self.robot_model.eef_name).reshape((3, -1))
+    #     Jp_joint = Jp[:, self._ref_joint_vel_indexes]
 
-        Jr = self.sim.data.get_body_jacr(
-            self.robot_model.eef_name).reshape((3, -1))
-        Jr_joint = Jr[:, self._ref_joint_vel_indexes]
+    #     Jr = self.sim.data.get_body_jacr(
+    #         self.robot_model.eef_name).reshape((3, -1))
+    #     Jr_joint = Jr[:, self._ref_joint_vel_indexes]
 
-        eef_lin_vel = Jp_joint.dot(self._joint_velocities)
-        eef_rot_vel = Jr_joint.dot(self._joint_velocities)
-        return np.concatenate([eef_lin_vel, eef_rot_vel])
+    #     eef_lin_vel = Jp_joint.dot(self._joint_velocities)
+    #     eef_rot_vel = Jr_joint.dot(self._joint_velocities)
+    #     return np.concatenate([eef_lin_vel, eef_rot_vel])
 
-    @property
-    def _hand_pos(self):
-        """
-        Returns:
-            np.array: 3-array representing the position of eef in base frame of robot.
-        """
-        eef_pose_in_base = self._hand_pose
-        return eef_pose_in_base[:3, 3]
+    # @property
+    # def _hand_pos(self):
+    #     """
+    #     Returns:
+    #         np.array: 3-array representing the position of eef in base frame of robot.
+    #     """
+    #     eef_pose_in_base = self._hand_pose
+    #     return eef_pose_in_base[:3, 3]
 
-    @property
-    def _hand_orn(self):
-        """
-        Returns:
-            np.array: (3,3) array representing the orientation of eef in base frame of robot as a rotation matrix.
-        """
-        eef_pose_in_base = self._hand_pose
-        return eef_pose_in_base[:3, :3]
+    # @property
+    # def _hand_orn(self):
+    #     """
+    #     Returns:
+    #         np.array: (3,3) array representing the orientation of eef in base frame of robot as a rotation matrix.
+    #     """
+    #     eef_pose_in_base = self._hand_pose
+    #     return eef_pose_in_base[:3, :3]
 
-    @property
-    def _hand_vel(self):
-        """
-        Returns:
-            np.array: (x,y,z) velocity of eef in base frame of robot.
-        """
-        return self._hand_total_velocity[:3]
+    # @property
+    # def _hand_vel(self):
+    #     """
+    #     Returns:
+    #         np.array: (x,y,z) velocity of eef in base frame of robot.
+    #     """
+    #     return self._hand_total_velocity[:3]
 
-    @property
-    def _hand_ang_vel(self):
-        """
-        Returns:
-            np.array: (ax,ay,az) angular velocity of eef in base frame of robot.
-        """
-        return self._hand_total_velocity[3:]
+    # @property
+    # def _hand_ang_vel(self):
+    #     """
+    #     Returns:
+    #         np.array: (ax,ay,az) angular velocity of eef in base frame of robot.
+    #     """
+    #     return self._hand_total_velocity[3:]

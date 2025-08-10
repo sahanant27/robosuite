@@ -225,13 +225,6 @@ class OSCDelta(Controller):
         self.use_nullspace = use_nullspace
 
         # initialize goals based on initial pos / ori
-        # self.initial_ee_ori_mat = np.round(self.initial_ee_ori_mat)
-        # self.goal_ori = np.array(self.initial_ee_ori_mat)
-        # self.goal_pos = np.array(self.initial_ee_pos)
-
-        # self.relative_ori = np.zeros(3)
-        # self.ori_ref = None
-
         self.goal_pos = None
         self.goal_ori = None
 
@@ -302,7 +295,7 @@ class OSCDelta(Controller):
 
         if self.interpolator_ori is not None:
             # reference is the current orientation at start
-            self.ori_ref = np.array(self.ee_ori_mat)
+            self.ori_ref = np.array(self.ref_ori_mat)
             # goal is the total orientation error
             self.interpolator_ori.set_goal(
                 orientation_error(self.goal_ori, self.ori_ref))
@@ -371,58 +364,74 @@ class OSCDelta(Controller):
                 # Nonlinear case not currently supported
                 pass
         else:
-            desired_pos = np.array(self.goal_pos)
+            if self.input_ref_frame == "base":
+                # compute goal based on current base position and orientation
+                desired_world_pos = self.origin_pos + \
+                    np.dot(self.origin_ori, self.goal_pos)
+            elif self.input_ref_frame == "world":
+                desired_world_pos = self.goal_pos
+            else:
+                raise ValueError
 
         if self.interpolator_ori is not None:
             # relative orientation based on difference between current ori and ref
             self.relative_ori = orientation_error(
-                self.ee_ori_mat, self.ori_ref)
+                self.ref_ori_mat, self.ori_ref)
 
             ori_error = self.interpolator_ori.get_interpolated_goal()
         else:
-            desired_ori = np.array(self.goal_ori)
-            ori_error = orientation_error(desired_ori, self.ee_ori_mat)
+            if self.input_ref_frame == "base":
+                # compute goal based on current base orientation
+                desired_world_ori = np.dot(self.origin_ori, self.goal_ori)
+            elif self.input_ref_frame == "world":
+                desired_world_ori = self.goal_ori
+            else:
+                raise ValueError
+            ori_error = orientation_error(desired_world_ori, self.ref_ori_mat)
 
-        # Compute desired force and torque based on errors
-        position_error = desired_pos - self.ee_pos
-        vel_pos_error = -self.ee_pos_vel
+        position_error = desired_world_pos - self.ref_pos
+        base_pos_vel = np.array(self.sim.data.get_site_xvelp(
+            f"{self.naming_prefix}{self.part_name}_center"))
+        vel_pos_error = -(self.ref_pos_vel - base_pos_vel)
 
         # F_r = kp * pos_err + kd * vel_err
-        desired_force = (np.multiply(np.array(position_error), np.array(self.kp[0:3]))
-                         + np.multiply(vel_pos_error, self.kd[0:3]))
+        desired_force = np.multiply(np.array(position_error), np.array(self.kp[0:3])) + np.multiply(
+            vel_pos_error, self.kd[0:3]
+        )
 
-        vel_ori_error = -self.ee_ori_vel
+        base_ori_vel = np.array(self.sim.data.get_site_xvelr(
+            f"{self.naming_prefix}{self.part_name}_center"))
+        vel_ori_error = -(self.ref_ori_vel - base_ori_vel)
 
         # Tau_r = kp * ori_err + kd * vel_err
-        desired_torque = (np.multiply(np.array(ori_error), np.array(self.kp[3:6]))
-                          + np.multiply(vel_ori_error, self.kd[3:6]))
+        desired_torque = np.multiply(np.array(ori_error), np.array(self.kp[3:6])) + np.multiply(
+            vel_ori_error, self.kd[3:6]
+        )
 
         # Compute nullspace matrix (I - Jbar * J) and lambda matrices ((J * M^-1 * J^T)^-1)
-        lambda_full, lambda_pos, lambda_ori, nullspace_matrix = opspace_matrices(self.mass_matrix,
-                                                                                 self.J_full,
-                                                                                 self.J_pos,
-                                                                                 self.J_ori)
+        lambda_full, lambda_pos, lambda_ori, nullspace_matrix = opspace_matrices(
+            self.mass_matrix, self.J_full, self.J_pos, self.J_ori
+        )
 
         # Decouples desired positional control from orientation control
-        if self.uncoupling and self.use_lambda:
+        if self.uncoupling:
             decoupled_force = np.dot(lambda_pos, desired_force)
             decoupled_torque = np.dot(lambda_ori, desired_torque)
-            wrench = np.concatenate([decoupled_force, decoupled_torque])
-        elif self.use_lambda:
-            desired_wrench = np.concatenate([desired_force, desired_torque])
-            wrench = np.dot(lambda_full, desired_wrench)
+            decoupled_wrench = np.concatenate(
+                [decoupled_force, decoupled_torque])
         else:
-            wrench = np.concatenate([desired_force, desired_torque])
+            desired_wrench = np.concatenate([desired_force, desired_torque])
+            decoupled_wrench = np.dot(lambda_full, desired_wrench)
 
         # Gamma (without null torques) = J^T * F + gravity compensations
-        self.torques = np.dot(self.J_full.T, wrench) + self.torque_compensation
-
+        self.torques = np.dot(
+            self.J_full.T, decoupled_wrench) + self.torque_compensation
         # Calculate and add nullspace torques (nullspace_matrix^T * Gamma_null) to final torques
         # Note: Gamma_null = desired nullspace pose torques, assumed to be positional joint control relative
         #                     to the initial joint positions
-        if self.use_nullspace:
-            self.torques += nullspace_torques(self.mass_matrix, nullspace_matrix,
-                                              self.initial_joint, self.joint_pos, self.joint_vel)
+        self.torques += nullspace_torques(
+            self.mass_matrix, nullspace_matrix, self.initial_joint, self.joint_pos, self.joint_vel
+        )
 
         # Always run superclass call for any cleanups at the end
         super().run_controller()
