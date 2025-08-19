@@ -222,8 +222,8 @@ class VirtualArm(FixedBaseRobot):
         #         gripper_action = 0.04
         #     # Now, reset the gripper if necessary
         #     if self.has_gripper:
-        #         self.sim.data.qpos[
         #             self._ref_gripper_joint_pos_indexes
+        #         self.sim.data.qpos[
         #         ] = np.array([gripper_action, -gripper_action])  # start with open gripper instead of self.gripper.init_qpos
 
         # # Update base pos / ori references in controller
@@ -245,20 +245,6 @@ class VirtualArm(FixedBaseRobot):
         # First, run the superclass method to setup references for joint-related values / indexes
         super().setup_references()
 
-        # Now, add references to gripper if necessary
-        # indices for grippers in qpos, qvel
-        # if self.has_gripper:
-        #     self.gripper_joints = list(self.gripper["right"].joints)
-        #     self._ref_gripper_joint_pos_indexes = [
-        #         self.sim.model.get_joint_qpos_addr(x) for x in self.gripper_joints
-        #     ]
-        #     self._ref_gripper_joint_vel_indexes = [
-        #         self.sim.model.get_joint_qvel_addr(x) for x in self.gripper_joints
-        #     ]
-        #     self._ref_joint_gripper_actuator_indexes = [
-        #         self.sim.model.actuator_name2id(actuator)
-        #         for actuator in self.gripper.actuators
-        #     ]
 
     def control(self, action, policy_step=False):
         """
@@ -274,66 +260,6 @@ class VirtualArm(FixedBaseRobot):
         Raises:
             AssertionError: [Invalid action dimension]
         # """
-        # # clip actions into valid range
-        # assert len(action) == self.action_dim, \
-        #     "environment got invalid action dimension -- expected {}, got {}".format(
-        #         self.action_dim, len(action))
-
-        # gripper_action = None
-        # if self.control_gripper:
-        #     # all indexes past controller dimension indexes
-        #     gripper_action = action[self.controller.control_dim:]
-        #     arm_action = action[:self.controller.control_dim]
-        # else:
-        #     arm_action = action
-
-        # # Update the controller goal if this is a new policy step
-        # if policy_step:
-        #     self.controller.set_goal(arm_action)
-
-        # # Now run the controller for a step
-        # torques = self.controller.run_controller()
-
-        # # Clip the torques
-        # low, high = self.torque_limits
-        # self.torques = np.clip(torques, low, high)
-
-        # # Get gripper action, if applicable
-        # if self.control_gripper:
-        #     self.grip_action(gripper=self.gripper,
-        #                      gripper_action=gripper_action)
-        # else:
-        #     if self.close_gripper:
-        #         gripper_action = 1
-        #     else:
-        #         gripper_action = -1
-        #     self.grip_action(gripper=self.gripper,
-        #                      gripper_action=[gripper_action])
-
-        # # Apply joint torque control
-        # self.sim.data.ctrl[self._ref_joint_actuator_indexes] = self.torques
-
-        # # If this is a policy step, also update buffers holding recent values of interest
-        # if policy_step:
-        #     # Update proprioceptive values
-        #     self.recent_qpos.push(self._joint_positions)
-        #     self.recent_actions.push(action)
-        #     self.recent_torques.push(self.torques)
-        #     self.recent_ee_forcetorques.push(np.concatenate(
-        #         (self.ee_force, self.ee_torque)))  # gripper base
-        #     self.recent_ee_pose.push(np.concatenate(
-        #         (self.controller.ee_pos, T.mat2quat(self.controller.ee_ori_mat))))  # grip_site
-        #     self.recent_ee_vel.push(np.concatenate(
-        #         (self.controller.ee_pos_vel, self.controller.ee_ori_vel)))  # grip_site
-
-        #     # Estimation of eef acceleration (averaged derivative of recent velocities)
-        #     self.recent_ee_vel_buffer.push(np.concatenate(
-        #         (self.controller.ee_pos_vel, self.controller.ee_ori_vel)))
-        #     diffs = np.vstack([self.recent_ee_acc.current,
-        #                        self.control_freq * np.diff(self.recent_ee_vel_buffer.buf, axis=0)])
-        #     ee_acc = np.array([np.convolve(col, np.ones(
-        #         10) / 10., mode='valid')[0] for col in diffs.transpose()])
-        #     self.recent_ee_acc.push(ee_acc)
 
         super().control(action, policy_step)
 
