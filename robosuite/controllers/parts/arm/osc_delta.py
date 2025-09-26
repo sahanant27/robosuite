@@ -254,19 +254,24 @@ class OSCDelta(Controller):
         # Update state
         self.update()
 
-        # # TODO: parse action for variable impedance mode
-        # # Parse action based on the impedance mode, and update kp / kd as necessary
-        if self.impedance_mode == "variable":
-            damping_ratio, kp, delta = action[:6], action[6:12], action[12:]
-            self.kp = np.clip(kp, self.kp_min, self.kp_max)
-            self.kd = 2 * np.sqrt(self.kp) * np.clip(damping_ratio,
-                                                     self.damping_ratio_min, self.damping_ratio_max)
-        elif self.impedance_mode == "variable_kp":
-            kp, delta = action[:6], action[6:]
-            self.kp = np.clip(kp, self.kp_min, self.kp_max)
-            self.kd = 2 * np.sqrt(self.kp)  # critically damped
-        else:   # This is case "fixed"
-            delta = action
+        # # # TODO: parse action for variable impedance mode
+        # # # Parse action based on the impedance mode, and update kp / kd as necessary
+        # if self.impedance_mode == "variable":
+        #     damping_ratio, kp, delta = action[:6], action[6:12], action[12:]
+        #     self.kp = np.clip(kp, self.kp_min, self.kp_max)
+        #     self.kd = 2 * np.sqrt(self.kp) * np.clip(damping_ratio,
+        #                                              self.damping_ratio_min, self.damping_ratio_max)
+        # elif self.impedance_mode == "variable_kp":
+        #     kp, delta = action[:6], action[6:]
+        #     self.kp = np.clip(kp, self.kp_min, self.kp_max)
+        #     self.kd = 2 * np.sqrt(self.kp)  # critically damped
+        # else:   # This is case "fixed"
+        #     delta = action
+        delta = np.zeros(self.control_dim)
+        for i in range(self.control_dim):
+            delta[i] = action[i]
+            
+        assert self.control_dim == len(action) -1 
 
         # Align actions to corresponding the enabled axis.
         # For example, 3D action space in XZPlane will be assigned to x-translation, z-translation and y-rotation.
