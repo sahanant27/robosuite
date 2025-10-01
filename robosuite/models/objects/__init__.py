@@ -1,7 +1,7 @@
 from .objects import MujocoObject, MujocoXMLObject, MujocoGeneratedObject
 from .generated_objects import CompositeBodyObject, CompositeObject, PrimitiveObject
 from .object_groups import ObjectGroup
-
+from .ungraspable_objects import *
 from .xml_objects import (
     BottleObject,
     CanObject,

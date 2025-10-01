@@ -1,0 +1,1 @@
+from .ungraspable_box import SlipBoxObject
