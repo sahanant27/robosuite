@@ -118,49 +118,6 @@ class VirtualArm(FixedBaseRobot):
             lite_physics=lite_physics,
         )
 
-    # def _load_controller(self):
-    #     """
-    #     Loads controller to be used for dynamic trajectories
-    #     """
-    #     # First, load the default controller if none is specified
-    #     if not self.controller_config:
-    #         # Need to update default for a single agent
-    #         controller_path = os.path.join(os.path.dirname(robosuite.__file__),
-    #                                        'controllers/config/{}.json'.format(
-    #                                            self.robot_model.default_controller_config))
-    #         self.controller_config = load_part_controller_config(
-    #             custom_fpath=controller_path)
-
-    #     # Assert that the controller config is a dict file:
-    #     #             NOTE: "type" must be one of: {JOINT_POSITION, JOINT_TORQUE, JOINT_VELOCITY,
-    #     #                                           OSC_POSITION, OSC_POSE, IK_POSE}
-    #     assert type(self.controller_config) == dict, \
-    #         "Inputted controller config must be a dict! Instead, got type: {}".format(
-    #             type(self.controller_config))
-
-    #     # Add to the controller dict additional relevant params:
-    #     #   the robot name, mujoco sim, eef_name, joint_indexes, timestep (model) freq,
-    #     #   policy (control) freq, and ndim (# joints)
-    #     self.controller_config["robot_name"] = self.name
-    #     self.controller_config["sim"] = self.sim
-    #     self.controller_config["eef_name"] = self.gripper.important_sites["grip_site"]
-    #     self.controller_config["joint_indexes"] = {
-    #         "joints": self.joint_indexes,
-    #         "qpos": self._ref_joint_pos_indexes,
-    #         "qvel": self._ref_joint_vel_indexes
-    #     }
-    #     self.controller_config["actuator_range"] = self.torque_limits
-    #     self.controller_config["policy_freq"] = self.control_freq
-    #     self.controller_config["ndim"] = len(self.robot_joints)
-
-    #     # Instantiate the relevant controller
-
-    #     if "OSC_customized" in self.controller_config["type"]:
-    #         self.controller = OSCDelta(**self.controller_config)
-    #     else:
-    #         self.controller = controller_factory(
-    #             self.controller_config["type"], self.controller_config)
-
     def load_model(self):
         """
         Loads robot and optionally add grippers.
@@ -175,14 +132,14 @@ class VirtualArm(FixedBaseRobot):
                             .format(self.robot_model.arm_type, type(self)))
 
         # Make the gripper stiff so that it won't move after collision
-        if not self.control_gripper and self.gripper_type == 'default':
-            self.gripper.actuator[0].set("kp", str(1e6))
-            self.gripper.actuator[1].set("kp", str(1e6))
+        if not self.control_gripper and self.gripper_type["right"] == 'default':
+            self.gripper["right"].actuator[0].set("kp", str(1e6))
+            self.gripper["right"].actuator[1].set("kp", str(1e6))
 
         # Increase default friction
-        if self.gripper_type == 'panda_narrow':
+        if self.gripper_type["right"] == 'panda_narrow':
             gripper_geoms = find_elements(
-                self.gripper.root, 'geom', return_first=False)
+                self.gripper["right"].root, 'geom', return_first=False)
             for geom in gripper_geoms:
                 # if "collision" in geom.get("name"):
                 if 'pad_outer_collision' in geom.get("name") or 'finger1_collision' in geom.get("name") or 'finger2_collision' in geom.get("name"):
@@ -215,27 +172,7 @@ class VirtualArm(FixedBaseRobot):
         # deterministic = True
         super().reset(deterministic)
 
-        # if not deterministic and self.gripper_type == 'default':
-        #     if self.close_gripper:
-        #         gripper_action = 0
-        #     else:
-        #         gripper_action = 0.04
-        #     # Now, reset the gripper if necessary
-        #     if self.has_gripper:
-        #             self._ref_gripper_joint_pos_indexes
-        #         self.sim.data.qpos[
-        #         ] = np.array([gripper_action, -gripper_action])  # start with open gripper instead of self.gripper.init_qpos
-
-        # # Update base pos / ori references in controller
-        # self.controller.update_base_pose(self.base_pos, self.base_ori)
-
-        # # # Setup buffers to hold recent values
-        # self.recent_ee_forcetorques = DeltaBuffer(dim=6)
-        # self.recent_ee_pose = DeltaBuffer(dim=7)
-        # self.recent_ee_vel = DeltaBuffer(dim=6)
-        # self.recent_ee_vel_buffer = RingBuffer(dim=6, length=10)
-        # self.recent_ee_acc = DeltaBuffer(dim=6)
-
+      
     def setup_references(self):
         """
         Sets up necessary reference for robots, grippers, and objects.

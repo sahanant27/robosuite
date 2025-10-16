@@ -32,7 +32,7 @@ class PandaGripperBase(GripperModel):
             "right_finger": ["finger2_collision", "finger2_pad_collision"],
             "left_fingerpad": ["finger1_pad_collision"],
             "right_fingerpad": ["finger2_pad_collision"],
-        }
+           }
 
 
 class PandaGripper(PandaGripperBase):
